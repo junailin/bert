@@ -292,26 +292,25 @@ class MrpcProcessor(DataProcessor):
     return self._create_examples(
         self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
 
-  def get_labels(self):
+  def get_labels(self,labels): # change
     """See base class."""
-    return ["0", "1"]
+    return set(labels)
 
-  def _create_examples(self, lines, set_type):
+  def _create_examples(self, lines, set_type):# change
     """Creates examples for the training and dev sets."""
     examples = []
+    labels = []
+    labels_test = []
     for (i, line) in enumerate(lines):
       if i == 0:
         continue
       guid = "%s-%s" % (set_type, i)
-      text_a = tokenization.convert_to_unicode(line[3])
-      text_b = tokenization.convert_to_unicode(line[4])
-      if set_type == "test":
-        label = "0"
-      else:
-        label = tokenization.convert_to_unicode(line[0])
+      text_a = tokenization.convert_to_unicode(line[0])
+      label = tokenization.convert_to_unicode(line[1])
+      labels.append(label)
       examples.append(
-          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-    return examples
+          InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+    return examples,labels,labels_test
 
 
 class ColaProcessor(DataProcessor):
@@ -769,7 +768,7 @@ def main(_):
 
   processor = processors[task_name]()
 
-  label_list = processor.get_labels()
+#  label_list = processor.get_labels()
 
   tokenizer = tokenization.FullTokenizer(
       vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
@@ -793,11 +792,15 @@ def main(_):
   train_examples = None
   num_train_steps = None
   num_warmup_steps = None
+
+  train_examples, train_labels, temp = processor.get_train_examples(FLAGS.data_dir) #change
+
   if FLAGS.do_train:
-    train_examples = processor.get_train_examples(FLAGS.data_dir)
     num_train_steps = int(
         len(train_examples) / FLAGS.train_batch_size * FLAGS.num_train_epochs)
     num_warmup_steps = int(num_train_steps * FLAGS.warmup_proportion)
+   
+  label_list = processor.get_labels(train_labels)
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
