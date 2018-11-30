@@ -7,6 +7,7 @@ python run_classifier_v2.py \
     --task_name=MRPC \
     --do_train=true \
     --do_eval=true \
+    --do_predict=true \
     --caps_iter=10 \
     --data_dir=$GLUE_DIR \
     --vocab_file=$BERT_BASE_DIR/vocab.txt \
