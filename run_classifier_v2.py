@@ -84,9 +84,9 @@ flags.DEFINE_integer(
     "Sequences longer than this will be truncated, and sequences shorter "
     "than this will be padded.")
 
-flags.DEFINE_bool("do_train", True, "Whether to run training.")
+flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
-flags.DEFINE_bool("do_eval", True, "Whether to run eval on the dev set.")
+flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
 
 flags.DEFINE_bool(
     "do_predict", False,
@@ -265,7 +265,7 @@ class MrpcProcessor(DataProcessor):
         """See base class."""
 
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "test")
+            self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
 
     def get_labels(self, labels):
         """See base class."""
@@ -289,9 +289,6 @@ class MrpcProcessor(DataProcessor):
             # tokenization is based on vocab file
             text_a = tokenization.convert_to_unicode(line[0])
             label = tokenization.convert_to_unicode(line[1].strip())
-            if i < 10:
-                print(line)
-                print("*"*10)
             labels.append(label)
 
             if set_type == "test":
