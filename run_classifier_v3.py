@@ -538,13 +538,12 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
                  labels, num_labels, use_one_hot_embeddings):
     """Creates a classification model."""
     model = modeling.BertModel(
-            config=bert_config,
-            is_training=is_training,
-            input_ids=input_ids,
-            input_mask=input_mask,
-            token_type_ids=segment_ids,
-            use_one_hot_embeddings=use_one_hot_embeddings)
-
+        config=bert_config,
+        is_training=is_training,
+        input_ids=input_ids,
+        input_mask=input_mask,
+        token_type_ids=segment_ids,
+        use_one_hot_embeddings=use_one_hot_embeddings)
 
     # %% Added layers for specific tasks
 
@@ -557,34 +556,39 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
     # 768 hidden size
     # 128 seq length
     # 32 batch size
-    output_layer = model.get_pooled_output()
-    
-    hidden_size = output_layer.shape[-1].value
+    output_layer = model.get_sequence_output() #model.get_pooled_output()
+    seq_length, hidden_size = output_layer.shape[-2].value, output_layer.shape[-1].value
+    sent_rep = routing_masked(output_layer, seq_length,hidden_size, FLAGS.caps_iter , 3, scope='attention')
+    sent_rep_last_dim = int(sent_rep.shape[-1])
 
     output_weights = tf.get_variable(
-            "output_weights", [num_labels, hidden_size],
-            initializer=tf.truncated_normal_initializer(stddev=0.02))
+        "output_weights", [num_labels, sent_rep_last_dim],
+        initializer=tf.truncated_normal_initializer(stddev=0.02))
 
     output_bias = tf.get_variable(
-            "output_bias", [num_labels], initializer=tf.zeros_initializer())
+        "output_bias", [num_labels], initializer=tf.zeros_initializer())
 
     with tf.variable_scope("loss"):
         if is_training:
-        # I.e., 0.1 dropout
-            output_layer = tf.nn.dropout(output_layer, keep_prob=0.9)
+            # I.e., 0.1 dropout
+            sent_rep = tf.nn.dropout(sent_rep, keep_prob=0.9)
 
-        logits = tf.matmul(output_layer, output_weights, transpose_b=True)
+        logits = tf.matmul(sent_rep, output_weights, transpose_b=True)
         logits = tf.nn.bias_add(logits, output_bias)
         probabilities = tf.nn.softmax(logits, axis=-1)
-        log_probs = tf.nn.log_softmax(logits,axis=-1)
+        log_probs = tf.nn.log_softmax(logits, axis=-1)
 
+        # correct_predictions = tf.equal(log_probs, labels)
+        # accuracy = tf.reduce_mean(tf.cast(correct_predictions, "float"), name="accuracy")
+
+        # size becomes binary 32*2
+        # labels is the actual label value
         one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
 
         per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
         loss = tf.reduce_mean(per_example_loss)
 
         return (loss, per_example_loss, logits, probabilities)
-
 
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
@@ -658,23 +662,22 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
         elif mode == tf.estimator.ModeKeys.EVAL:
 
             def metric_fn(per_example_loss, label_ids, logits):
-                eval_predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
+                predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
 
-                eval_accuracy = tf.metrics.accuracy(label_ids, eval_predictions)
-                eval_precision = tf.metrics.precision(label_ids, eval_predictions)  # add
-                eval_recall = tf.metrics.recall(label_ids, eval_predictions)
+                accuracy = tf.metrics.accuracy(label_ids, predictions)
+                precision = tf.metrics.precision(label_ids, predictions)  # add
+                recall = tf.metrics.recall(label_ids, predictions)
 
-                tf.summary.scalar('eval_accuracy', eval_accuracy[1])
-                tf.summary.scalar('eval_precision', eval_precision[1])
-                tf.summary.scalar('eval_recall', eval_recall[1]) # add
+                tf.summary.scalar('eval_accuracy', accuracy[1])
+                tf.summary.scalar('eval_precision', precision[1])
+                tf.summary.scalar('eval_recall', recall[1]) # add
 
-                eval_loss = tf.metrics.mean(per_example_loss)
-
+                loss = tf.metrics.mean(per_example_loss)
                 return {
-                    "eval_accuracy": eval_accuracy,
-                    "eval_loss": eval_loss,
-                    "eval_precision": eval_precision,
-                    "eval_recall": eval_recall
+                    "eval_accuracy": accuracy,
+                    "eval_loss": loss,
+                    "eval_precision": precision,
+                    "eval_recall": recall
                 }
 
             eval_metrics = (metric_fn, [per_example_loss, label_ids, logits])
