@@ -259,7 +259,7 @@ class MrpcProcessor(DataProcessor):
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+            self._read_tsv(os.path.join(data_dir, "test.tsv")), "dev")
 
     def get_test_examples(self, data_dir):
         """See base class."""
@@ -269,7 +269,7 @@ class MrpcProcessor(DataProcessor):
 
     def get_labels(self, labels):
         """See base class."""
-        return set(labels)
+        return sorted(list(set(labels)))
 
     # new function get the result tsv
     def get_results(self, data_dir):
@@ -291,8 +291,8 @@ class MrpcProcessor(DataProcessor):
             label = tokenization.convert_to_unicode(line[1].strip())
             labels.append(label)
 
-            if set_type == "test":
-                label = "0"  # test 没标签时，虚假标签
+            #if set_type == "test":
+            #    label = "0"  # test 没标签时，虚假标签
             labels_test.append(label)
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
@@ -646,9 +646,9 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
             precision = tf.metrics.precision(label_ids, predictions)  # add
             recall = tf.metrics.recall(label_ids, predictions)
 
-            tf.summary.scalar('accuracy', accuracy[1])
-            tf.summary.scalar('precision', precision[1])
-            tf.summary.scalar('recall', recall[1]) # add
+            tf.summary.scalar('accuracy', accuracy[0])
+            tf.summary.scalar('precision', precision[0])
+            tf.summary.scalar('recall', recall[0]) # add
 
             train_op = optimization.create_optimizer(
                 total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
@@ -662,22 +662,22 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
         elif mode == tf.estimator.ModeKeys.EVAL:
 
             def metric_fn(per_example_loss, label_ids, logits):
-                predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
+                eval_predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
 
-                accuracy = tf.metrics.accuracy(label_ids, predictions)
-                precision = tf.metrics.precision(label_ids, predictions)  # add
-                recall = tf.metrics.recall(label_ids, predictions)
+                eval_accuracy = tf.metrics.accuracy(label_ids, eval_predictions)
+                eval_precision = tf.metrics.precision(label_ids, eval_predictions)  # add
+                eval_recall = tf.metrics.recall(label_ids, eval_predictions)
 
-                tf.summary.scalar('eval_accuracy', accuracy[1])
-                tf.summary.scalar('eval_precision', precision[1])
-                tf.summary.scalar('eval_recall', recall[1]) # add
+                tf.summary.scalar('eval_accuracy', eval_accuracy[1])
+                tf.summary.scalar('eval_precision', eval_precision[1])
+                tf.summary.scalar('eval_recall', eval_recall[1]) # add
 
-                loss = tf.metrics.mean(per_example_loss)
+                eval_loss = tf.metrics.mean(per_example_loss)
                 return {
-                    "eval_accuracy": accuracy,
-                    "eval_loss": loss,
-                    "eval_precision": precision,
-                    "eval_recall": recall
+                    "eval_accuracy": eval_accuracy,
+                    "eval_loss": eval_loss,
+                    "eval_precision": eval_precision,
+                    "eval_recall": eval_recall
                 }
 
             eval_metrics = (metric_fn, [per_example_loss, label_ids, logits])
@@ -693,83 +693,6 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
     return model_fn
 
-
-# This function is not used by this file but is still used by the Colab and
-# people who depend on it.
-def input_fn_builder(features, seq_length, is_training, drop_remainder):
-    """Creates an `input_fn` closure to be passed to TPUEstimator."""
-
-    all_input_ids = []
-    all_input_mask = []
-    all_segment_ids = []
-    all_label_ids = []
-
-    # each sample has a corresponding feature dict
-    # contains input id: token ids
-    # input mask: whether or not value is zero padding
-    # segment id: mask showing first part or second part of sequence
-    # label value
-    # just unpacks different types to a combined list
-    for feature in features:
-        all_input_ids.append(feature.input_ids)
-        all_input_mask.append(feature.input_mask)
-        all_segment_ids.append(feature.segment_ids)
-        all_label_ids.append(feature.label_id)
-
-    def input_fn(params):
-        """The actual input function."""
-        batch_size = params["batch_size"]
-
-        num_examples = len(features)
-
-        # This is for demo purposes and does NOT scale to large data sets. We do
-        # not use Dataset.from_generator() because that uses tf.py_func which is
-        # not TPU compatible. The right way to load data is with TFRecordReader.
-        d = tf.data.Dataset.from_tensor_slices({
-            "input_ids":
-                tf.constant(
-                    all_input_ids, shape=[num_examples, seq_length],
-                    dtype=tf.int32),
-            "input_mask":
-                tf.constant(
-                    all_input_mask,
-                    shape=[num_examples, seq_length],
-                    dtype=tf.int32),
-            "segment_ids":
-                tf.constant(
-                    all_segment_ids,
-                    shape=[num_examples, seq_length],
-                    dtype=tf.int32),
-            "label_ids":
-                tf.constant(all_label_ids, shape=[num_examples], dtype=tf.int32),
-        })
-
-        if is_training:
-            d = d.repeat()
-            d = d.shuffle(buffer_size=100)
-
-        d = d.batch(batch_size=batch_size, drop_remainder=drop_remainder)
-        return d
-
-    return input_fn
-
-
-# This function is not used by this file but is still used by the Colab and
-# people who depend on it.
-def convert_examples_to_features(examples, label_list, max_seq_length,
-                                 tokenizer):
-    """Convert a set of `InputExample`s to a list of `InputFeatures`."""
-
-    features = []
-    for (ex_index, example) in enumerate(examples):
-        if ex_index % 10000 == 0:
-            tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
-
-        feature = convert_single_example(ex_index, example, label_list,
-                                         max_seq_length, tokenizer)
-
-        features.append(feature)
-    return features
 
 
 def main(_):
