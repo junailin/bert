@@ -646,9 +646,9 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
             precision = tf.metrics.precision(label_ids, predictions)  # add
             recall = tf.metrics.recall(label_ids, predictions)
 
-            tf.summary.scalar('accuracy', accuracy[0])
-            tf.summary.scalar('precision', precision[0])
-            tf.summary.scalar('recall', recall[0]) # add
+            tf.summary.scalar('accuracy', accuracy[1])
+            tf.summary.scalar('precision', precision[1])
+            tf.summary.scalar('recall', recall[1]) # add
 
             train_op = optimization.create_optimizer(
                 total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)

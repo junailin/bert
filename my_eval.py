@@ -1,5 +1,5 @@
 import numpy as np
-name = 'SUBJ'
+name = 'MPQA'
 data_dir="/home/juncsu/Code/Data/CapsData/%s/test.tsv" % name
 data_dir1="/home/juncsu/Code/Data/Temp/%s/test_results.tsv" % name
 
@@ -30,5 +30,5 @@ cm = metrics.confusion_matrix(y_true, y_pred)
 from sklearn.metrics import classification_report
 #target_names = ['体育', '财经', '房产', '家居', '教育', '科技', '时尚', '时政', '游戏', '娱乐']
 print('-'*23+name+'-'*23)
-print(classification_report(y_true, y_pred))#, target_names=target_names))
+print(classification_report(y_true, y_pred,digits=3))#, target_names=target_names))
 
