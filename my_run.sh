@@ -8,7 +8,7 @@ python run_classifier_v3.py \
     --do_train=true \
     --do_eval=true \
     --do_predict=true \
-    --caps_iter=7 \
+    --caps_iter=10 \
     --data_dir=$GLUE_DIR \
     --vocab_file=$BERT_BASE_DIR/vocab.txt \
     --bert_config_file=$BERT_BASE_DIR/bert_config.json \
